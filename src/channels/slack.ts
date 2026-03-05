@@ -44,6 +44,7 @@ export class SlackChannel extends BaseChannel {
     super('slack');
     this.config = config;
     this.connected = false;
+    this.enabled = config.enabled;
     this.client = axios.create({
       baseURL: 'https://slack.com/api',
       headers: {

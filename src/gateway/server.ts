@@ -15,18 +15,23 @@ import { AgentLoop } from '../agent/loop';
 import { logger } from '../utils/logger';
 import { getConfig } from '../config';
 import { ChannelMessage } from '../types';
+import * as http from 'http';
 
 export class GatewayServer {
   private channelManager: ReturnType<typeof getChannelManager>;
   private messageBus: ReturnType<typeof getMessageBus>;
   private heartbeat: ReturnType<typeof initializeHeartbeat> | null;
   private isRunning: boolean;
+  private httpServer: http.Server | null;
+  private webhookPort: number;
 
-  constructor() {
+  constructor(webhookPort: number = 3000) {
     this.channelManager = getChannelManager();
     this.messageBus = getMessageBus();
     this.heartbeat = null;
     this.isRunning = false;
+    this.httpServer = null;
+    this.webhookPort = webhookPort;
   }
 
   /**
@@ -112,6 +117,9 @@ export class GatewayServer {
 
     await this.initialize();
 
+    // Start HTTP server for webhooks
+    this.startWebhookServer();
+
     // Start all enabled channels
     await this.channelManager.startAll();
 
@@ -135,6 +143,16 @@ export class GatewayServer {
 
     logger.info('Stopping gateway server...');
 
+    // Stop HTTP server
+    if (this.httpServer) {
+      await new Promise<void>((resolve) => {
+        this.httpServer!.close(() => {
+          logger.info('Webhook server stopped');
+          resolve();
+        });
+      });
+    }
+
     // Stop heartbeat
     if (this.heartbeat) {
       this.heartbeat.stop();
@@ -148,6 +166,69 @@ export class GatewayServer {
 
     this.isRunning = false;
     logger.info('Gateway server stopped');
+  }
+
+  /**
+   * Start webhook HTTP server for receiving events
+   */
+  private startWebhookServer(): void {
+    this.httpServer = http.createServer(async (req, res) => {
+      // Handle Slack events
+      if (req.url === '/slack/events' && req.method === 'POST') {
+        let body = '';
+
+        req.on('data', (chunk) => {
+          body += chunk.toString();
+        });
+
+        req.on('end', async () => {
+          try {
+            const event = JSON.parse(body);
+
+            // Handle URL verification challenge
+            if (event.challenge) {
+              res.writeHead(200, { 'Content-Type': 'text/plain' });
+              res.end(event.challenge);
+              return;
+            }
+
+            // Forward to Slack channel
+            const slackChannel = this.channelManager.getChannel('slack') as SlackChannel;
+            if (slackChannel) {
+              slackChannel.handleSlackEvent(event);
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+          } catch (error) {
+            logger.error('Error processing webhook', error);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'Invalid request' }));
+          }
+        });
+
+        return;
+      }
+
+      // Health check endpoint
+      if (req.url === '/health' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', running: this.isRunning }));
+        return;
+      }
+
+      // 404
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found' }));
+    });
+
+    this.httpServer.listen(this.webhookPort, () => {
+      logger.info(`Webhook server listening on port ${this.webhookPort}`);
+    });
+
+    this.httpServer.on('error', (error) => {
+      logger.error('Webhook server error', error);
+    });
   }
 
   /**

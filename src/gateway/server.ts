@@ -7,6 +7,7 @@ import { getChannelManager } from '../channels';
 import { TelegramChannel } from '../channels/telegram';
 import { DiscordChannel } from '../channels/discord';
 import { DingTalkChannel } from '../channels/dingtalk';
+import { SlackChannel } from '../channels/slack';
 import { getMessageBus } from '../bus';
 import { getSessionManager } from '../session';
 import { initializeHeartbeat } from '../heartbeat';
@@ -87,6 +88,14 @@ export class GatewayServer {
       await dingtalkChannel.initialize();
       this.channelManager.registerChannel(dingtalkChannel);
       logger.info('DingTalk channel registered');
+    }
+
+    // Register Slack channel if configured
+    if (config.channels?.slack) {
+      const slackChannel = new SlackChannel(config.channels.slack);
+      await slackChannel.initialize();
+      this.channelManager.registerChannel(slackChannel);
+      logger.info('Slack channel registered');
     }
 
     // Add more channels here as they are implemented

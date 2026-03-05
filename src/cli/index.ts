@@ -67,9 +67,14 @@ program
 program
   .command('gateway')
   .description('Start gateway server for channel integrations')
-  .action(async () => {
+  .option('--foreground', 'Run in foreground mode (default for systemd/PM2)', true)
+  .option('--pid-file <path>', 'Path to PID file')
+  .action(async (options: { foreground?: boolean; pidFile?: string }) => {
     try {
-      await gatewayCommand();
+      await gatewayCommand({
+        foreground: options.foreground !== false,
+        pidFile: options.pidFile,
+      });
     } catch (error) {
       logger.error({ error }, 'Gateway command failed');
       console.error(chalk.red(`Error: ${(error as Error).message}`));

@@ -2,7 +2,7 @@ import { Config } from '../config/schema';
 import { Message, LLMResponse, ToolDefinition, ProviderConfig } from '../types';
 import { ProviderError } from '../utils/errors';
 import { logger } from '../utils/logger';
-import { BaseProvider, OpenRouterProvider, AnthropicProvider, OpenAIProvider } from './base';
+import { BaseProvider, OpenRouterProvider, AnthropicProvider, OpenAIProvider, KimiProvider } from './base';
 import { findProviderByModel } from './registry';
 
 /**
@@ -91,6 +91,9 @@ export class ProviderManager {
           throw new ProviderError('vLLM provider requires apiBase configuration');
         }
         provider = new OpenAIProvider(providerConfig.apiKey, providerConfig.apiBase);
+        break;
+      case 'kimi':
+        provider = new KimiProvider(providerConfig.apiKey, providerConfig.apiBase);
         break;
       default:
         throw new ProviderError(`Unknown provider: ${providerName}`);

@@ -295,3 +295,76 @@ export class OpenAIProvider extends BaseProvider {
     }
   }
 }
+
+/**
+ * Kimi provider (Anthropic-compatible format)
+ */
+export class KimiProvider extends BaseProvider {
+  protected getDefaultApiBase(): string {
+    return 'https://api.kimi.com/coding/v1';
+  }
+
+  protected formatModelName(model: string): string {
+    // Remove kimi/ prefix if present
+    if (model.startsWith('kimi/')) {
+      return model.substring(5);
+    }
+    return model;
+  }
+
+  async complete(
+    messages: Message[],
+    model: string,
+    temperature = 0.7,
+    maxTokens = 4096,
+    tools?: ToolDefinition[]
+  ): Promise<LLMResponse> {
+    try {
+      // Extract system message
+      const systemMessage = messages.find((m) => m.role === 'system')?.content || '';
+      const nonSystemMessages = messages.filter((m) => m.role !== 'system');
+
+      const requestData: Record<string, unknown> = {
+        model: this.formatModelName(model),
+        messages: nonSystemMessages.map((m) => ({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: m.content,
+        })),
+        temperature,
+        max_tokens: maxTokens,
+      };
+
+      if (systemMessage) {
+        requestData.system = systemMessage;
+      }
+
+      if (tools && tools.length > 0) {
+        requestData.tools = tools.map((t) => t.function);
+      }
+
+      const response = await this.client.post<AnthropicResponse>('/messages', requestData, {
+        headers: {
+          'anthropic-version': '2023-06-01',
+          'x-api-key': this.apiKey,
+        },
+      });
+
+      const content = response.data.content[0];
+
+      return {
+        content: content.type === 'text' ? content.text || '' : '',
+        toolCalls: content.type === 'tool_use' ? [content as unknown as ToolCall] : undefined,
+        finishReason: response.data.stop_reason,
+        usage: response.data.usage
+          ? {
+              promptTokens: response.data.usage.input_tokens,
+              completionTokens: response.data.usage.output_tokens,
+              totalTokens: response.data.usage.input_tokens + response.data.usage.output_tokens,
+            }
+          : undefined,
+      };
+    } catch (error) {
+      handleProviderError(error, 'Kimi');
+    }
+  }
+}

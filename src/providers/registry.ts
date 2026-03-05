@@ -97,8 +97,17 @@ export const PROVIDERS: ProviderSpec[] = [
     skipPrefixes: ['dashscope/'],
   },
   {
+    name: 'kimi',
+    keywords: ['kimi', 'kimi-for-coding'],
+    envKey: 'KIMI_API_KEY',
+    displayName: 'Kimi (Moonshot)',
+    litellmPrefix: 'kimi',
+    skipPrefixes: ['kimi/'],
+    detectByKeyPrefix: 'sk-kimi-',
+  },
+  {
     name: 'moonshot',
-    keywords: ['moonshot', 'kimi'],
+    keywords: ['moonshot'],
     envKey: 'MOONSHOT_API_KEY',
     displayName: 'Moonshot (Kimi)',
     litellmPrefix: 'moonshot',
